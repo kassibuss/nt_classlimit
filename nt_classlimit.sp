@@ -40,36 +40,3 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
         g_iPlayerClass[client] = CLASS_NONE;
     }
 }
-
-public Action Cmd_OnClass(int client, const char[] command, int argc)
-{
-    /* whatever else code might go here, this is just the barebones of what's relevant for this */
-
-    int desired_class = GetCmdArgInt(1);
-
-    if (!IsClassAllowed(client, desired_class))
-    {
-        // re-display the menu etc here
-        return Plugin_Handled;
-    }
-
-    // If we accepted this class assignment, store it to the array
-    g_iPlayerClass[client] = desired_class;
-    return Plugin_Continue;
-}
-
-// Whether client is allowed to spawn as specific class
-bool IsClassAllowed(int client, int class)
-{
-    int num_players_in_class = GetNumPlayersOfClassInTeam(class, GetClientTeam(client));
-
-    return num_players_in_class < g_cvarMaxPlayersPerClass.IntValue;
-}
-
-// Tally up the number of players in a team that are of specific class
-int GetNumPlayersOfClassInTeam(int class, int team)
-{
-    int number_of_players = 0;
-    // TODO...
-    return number_of_players;
-}

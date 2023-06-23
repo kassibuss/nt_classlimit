@@ -68,7 +68,7 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (GetClientTeam(client)!= 1) // Spectator or no team assigned
+		if (GetClientTeam(client)!= team) // Player doesnt not have team; contienue
 		{
 			continue;
 		}
@@ -76,7 +76,7 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (!GetPlayerClass(client)) //player doesnt have class
+		if (GetPlayerClass(client)!= class) //player doesnt have class
 		{
 			continue;
 		}

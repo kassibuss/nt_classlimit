@@ -64,19 +64,19 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 	int number_of_players = 0;
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client))
+		if (!IsClientInGame(client)) 
 		{
 			continue;
 		}
-		if (false) // TODO!!! NOT PLAYER IN CORRECT TEAM
+		if (GetClientTeam(client)!= 1) // Spectator or no team assigned
 		{
 			continue;
 		}
-		if (false) // TODO!!! NOT PLAYER IS ALIVE
+		if (!IsPlayerAlive(client)) // Player is not alive
 		{
 			continue;
 		}
-		if (false) // TODO!!! NOT PLAYER HAS CLASS
+		if (!GetPlayerClass(client)) //player doesnt have class
 		{
 			continue;
 		}

@@ -35,6 +35,7 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	if (!IsClassAllowed(client, desired_class))
 	{
 		// re-display the menu etc here
+		PrintCenterText(client, "Please reselect a class");
 		ClientCommand(client, "classmenu");
 		return Plugin_Handled;
 	}

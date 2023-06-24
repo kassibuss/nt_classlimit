@@ -16,9 +16,9 @@ ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
 public void OnPluginStart()
 {
-	g_Cvar_MaxRecons = CreateConVar("sm_maxrecons", "32", "Maximum amount of recons allowed per player per team", _, true, 1.0, true, float(MaxClients));
-	g_Cvar_MaxAssaults = CreateConVar("sm_maxassaults", "32", "Maximum amount of assaults allowed per player per team", _, true, 1.0, true, float(MaxClients));
-	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32", "Maximum amount of support allowed per player team", _, true, 1.0, true, float(MaxClients));
+	g_Cvar_MaxRecons = CreateConVar("sm_maxrecons", "32", "Maximum amount of recons allowed per player per team", _, true, 0.0, true, float(MaxClients));
+	g_Cvar_MaxAssaults = CreateConVar("sm_maxassaults", "32", "Maximum amount of assaults allowed per player per team", _, true, 0.0, true, float(MaxClients));
+	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32", "Maximum amount of support allowed per player team", _, true, 0.0, true, float(MaxClients));
 
 	AddCommandListener(Cmd_OnClass, "setclass");
 }
@@ -46,18 +46,32 @@ bool IsClassAllowed(int client, int class)
 {
 	int num_players_in_class = GetNumPlayersOfClassInTeam(class, GetClientTeam(client));
 
-	switch (class)
+	ConVar cvar_limit;
+
+	if (class == CLASS_RECON)
 	{
-		case CLASS_RECON:
-			return num_players_in_class < g_Cvar_MaxRecons.IntValue;
-		case CLASS_ASSAULT:
-			return num_players_in_class < g_Cvar_MaxAssaults.IntValue;
-		case CLASS_SUPPORT:
-			return num_players_in_class < g_Cvar_MaxSupports.IntValue;
-		default:
-			// player had class other than recon/assault/support?
-			return false;
+		cvar_limit = g_Cvar_MaxRecons;
 	}
+	else if (class == CLASS_ASSAULT)
+	{
+		cvar_limit = g_Cvar_MaxAssaults;
+	}
+	else if (class == CLASS_SUPPORT)
+	{
+		cvar_limit = g_Cvar_MaxSupports;
+	}
+	else
+	{
+		return false;
+	}
+
+	// if class is completely banned
+	if (cvar_limit.IntValue == 0)
+	{
+		return false;
+	}
+
+	return num_players_in_class < cvar_limit.IntValue;
 }
 
 int GetNumPlayersOfClassInTeam(int class, int team)
@@ -86,3 +100,24 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 	}
 	return number_of_players;
 }
+
+// Backported from SourceMod/SourcePawn SDK for SM < 1.11 compatibility.
+// Used here under GPLv3 license: https://www.sourcemod.net/license.php
+// SourceMod (C) AlliedModders LLC.  All rights reserved.
+#if SOURCEMOD_V_MAJOR <= 1 && SOURCEMOD_V_MINOR < 11
+/**
+ * Retrieves a numeric command argument given its index, from the current
+ * console or server command. Will return 0 if the argument can not be
+ * parsed as a number. Use GetCmdArgIntEx to handle that explicitly.
+ *
+ * @param argnum        Argument number to retrieve.
+ * @return              Value of the command argument.
+ */
+stock int GetCmdArgInt(int argnum)
+{
+    char str[12];
+    GetCmdArg(argnum, str, sizeof(str));
+
+    return StringToInt(str);
+}
+#endif

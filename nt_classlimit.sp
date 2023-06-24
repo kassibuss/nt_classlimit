@@ -86,3 +86,24 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 	}
 	return number_of_players;
 }
+
+// Backported from SourceMod/SourcePawn SDK for SM < 1.11 compatibility.
+// Used here under GPLv3 license: https://www.sourcemod.net/license.php
+// SourceMod (C) AlliedModders LLC.  All rights reserved.
+#if SOURCEMOD_V_MAJOR <= 1 && SOURCEMOD_V_MINOR < 11
+/**
+ * Retrieves a numeric command argument given its index, from the current
+ * console or server command. Will return 0 if the argument can not be
+ * parsed as a number. Use GetCmdArgIntEx to handle that explicitly.
+ *
+ * @param argnum        Argument number to retrieve.
+ * @return              Value of the command argument.
+ */
+stock int GetCmdArgInt(int argnum)
+{
+    char str[12];
+    GetCmdArg(argnum, str, sizeof(str));
+
+    return StringToInt(str);
+}
+#endif

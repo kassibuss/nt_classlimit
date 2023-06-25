@@ -8,7 +8,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "0.1.0",
+	version		= "0.1.1",
 	url			= ""
 };
 
@@ -35,7 +35,7 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	if (!IsClassAllowed(client, desired_class))
 	{
 		// re-display the menu etc here
-		PrintCenterText(client, "Please reselect a class");
+		PrintToChat(client, "Please select another class");
 		ClientCommand(client, "classmenu");
 		return Plugin_Handled;
 	}

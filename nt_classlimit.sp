@@ -8,7 +8,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "0.1.2",
+	version		= "0.1.1",
 	url			= ""
 };
 
@@ -76,18 +76,6 @@ bool IsClassAllowed(int client, int class)
 	return num_players_in_class < cvar_limit.IntValue;
 }
 
-int GetAllowedClass(int client)
-{
-    for (int class = CLASS_RECON; class <= CLASS_SUPPORT; class++)
-    {
-        if (IsClassAllowed(client, class))
-        {
-            return class;
-        }
-    }
-    return CLASS_NONE;
-}
-
 int GetNumPlayersOfClassInTeam(int class, int team)
 {
 	int number_of_players = 0;
@@ -109,11 +97,6 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (!IsClassAllowed(client))
-		{
-			continue;
-		}
-
 		number_of_players += 1;
 	}
 	return number_of_players;

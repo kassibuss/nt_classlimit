@@ -36,6 +36,7 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	{
 		// re-display the menu etc here
 		PrintToChat(client, "Please select another class");
+		PrintCenterText(client, "Please select another class");
 		ClientCommand(client, "classmenu");
 		return Plugin_Handled;
 	}
@@ -100,6 +101,18 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		number_of_players += 1;
 	}
 	return number_of_players;
+}
+
+int GetAllowedClass(int client)
+{
+    for (int class = CLASS_RECON; class <= CLASS_SUPPORT; class++)
+    {
+        if (IsClassAllowed(client, class))
+        {
+            return class;
+        }
+    }
+    return CLASS_NONE;
 }
 
 // Backported from SourceMod/SourcePawn SDK for SM < 1.11 compatibility.

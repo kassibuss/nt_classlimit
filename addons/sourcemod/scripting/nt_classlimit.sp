@@ -54,6 +54,9 @@ public void OnPluginStart()
 	{
 		SetFailState("Failed to hook event");
 	}
+
+	// Create the default config file, if it doesn't exist yet
+	AutoExecConfig();
 }
 
 public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)

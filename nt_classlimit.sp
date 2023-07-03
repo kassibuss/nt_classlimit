@@ -9,7 +9,7 @@ public Plugin myinfo = {
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
 	version		= "0.1.1",
-	url			= ""
+	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;

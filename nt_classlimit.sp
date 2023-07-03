@@ -85,7 +85,7 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (GetClientTeam(client)!= team) // Player doesnt not have team; contienue
+		if (GetClientTeam(client)!= team) // Player doesn't not have team; continue
 		{
 			continue;
 		}
@@ -93,7 +93,7 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (GetPlayerClass(client)!= class) //player doesnt have class
+		if (GetPlayerClass(client)!= class) //player doesn't have class
 		{
 			continue;
 		}

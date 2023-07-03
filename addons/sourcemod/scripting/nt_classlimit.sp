@@ -39,13 +39,13 @@ public void OnPluginStart()
 	CloseHandle(gd);
 
 	g_Cvar_MaxRecons = CreateConVar("sm_maxrecons", "32",
-		"Maximum amount of recons allowed per player per team",
+		"Maximum amount of recons allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 	g_Cvar_MaxAssaults = CreateConVar("sm_maxassaults", "32",
-		"Maximum amount of assaults allowed per player per team",
+		"Maximum amount of assaults allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32",
-		"Maximum amount of support allowed per player team",
+		"Maximum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 
 	AddCommandListener(Cmd_OnClass, "setclass");

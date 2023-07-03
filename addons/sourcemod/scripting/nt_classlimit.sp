@@ -102,8 +102,8 @@ public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
 		// If this class was not allowed, see if there's any available class
 		int fallback_class = GetAllowedClass(client);
 
-		// If all the classes are full, just allow the player to spawn,
-		// and print a warning to global chat. This is necessary because otherwise
+		// If all the classes are full, just allow the player to spawn.
+		// This is necessary because otherwise
 		// this client would eventually spawn with no class, in a bugged state.
 		// Another alternative would be to forcibly yeet them to spectator,
 		// but this could be problematic in itself for competitive play due to

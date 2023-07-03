@@ -81,7 +81,7 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 	int number_of_players = 0;
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client)) 
+		if (!IsClientInGame(client))
 		{
 			continue;
 		}
@@ -110,14 +110,14 @@ int GetNumPlayersOfClassInTeam(int class, int team)
  * console or server command. Will return 0 if the argument can not be
  * parsed as a number. Use GetCmdArgIntEx to handle that explicitly.
  *
- * @param argnum        Argument number to retrieve.
- * @return              Value of the command argument.
+ * @param argnum		Argument number to retrieve.
+ * @return			  	Value of the command argument.
  */
 stock int GetCmdArgInt(int argnum)
 {
-    char str[12];
-    GetCmdArg(argnum, str, sizeof(str));
+	char str[12];
+	GetCmdArg(argnum, str, sizeof(str));
 
-    return StringToInt(str);
+	return StringToInt(str);
 }
 #endif

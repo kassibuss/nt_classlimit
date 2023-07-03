@@ -1,0 +1,31 @@
+"Games"
+{
+	"NeotokyoSource"
+	{
+		"Signatures"
+		{
+			"Sig_CNEOPlayer__PlayerReady"
+			{
+				"library"	"server"
+				"windows"	"\x56\x8B\xF1\x83\xBE\xC4\x0D\x00\x00\x01"
+			}
+		}
+		"Functions"
+		{
+			"Fn_CNEOPlayer__PlayerReady"
+			{
+				"signature"		"Sig_CNEOPlayer__PlayerReady"
+				"callconv"		"stdcall"
+				"return"		"bool"
+				"arguments"
+				{
+					"name"
+					{
+						"type"		"cbaseentity"
+						"register"	"ecx"
+					}
+				}
+			}
+		}
+	}
+}

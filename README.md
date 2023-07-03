@@ -8,8 +8,10 @@ Class limit plugin for competitive Neotokyo play
 
 ## Config
 ### Cvars
-* `sm_maxrecons` (min 0, max 32, default 32) – The maximum amount of recons allowed in a team
-* `sm_maxassaults` (min 0, max 32, default 32) – The maximum amount of assaults allowed in a team
-* `sm_maxsupports` (min 0, max 32, default 32) – The maximum amount of supports allowed in a team
+* `sm_maxrecons` (min 0, max 32, default 32) – Maximum amount of recons allowed per team
+* `sm_maxassaults` (min 0, max 32, default 32) – Maximum amount of assaults allowed per team
+* `sm_maxsupports` (min 0, max 32, default 32) – Maximum amount of supports allowed per team
+
+You can change these defaults at `cfg/sourcemod/plugin.nt_classlimit.cfg`; the config file will be automatically created using the default values if it doesn't exist already.
 
 Note that the sum of `(sm_maxrecons + sm_maxassaults + sm_maxsupports)` should **always** be larger or equal to the maximum amount of players per playable team (Jinrai or NSF) expected for your server. For example, if you restrict all teams to 1 player of each class (3 total), when a fourth player joins a playable team, their class restriction would be indeterminate.

@@ -200,6 +200,12 @@ public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
 
 public void OnClientPutInServer(int client)
 {
+	// Has to be a real client because the classes differ
+	if (IsFakeClient(client))
+	{
+		return;
+	}
+
 	if (!g_dd_Pfn)
 	{
 		HookClassSelectionPfns(client);
@@ -410,11 +416,15 @@ int GetNumPlayersOfClassInTeam(int class, int team)
 		{
 			continue;
 		}
-		if (!IsPlayerAlive(client))
+		if (GetPlayerClass(client) != class)
 		{
 			continue;
 		}
-		if (GetPlayerClass(client) != class)
+		// Consider someone who's chosen the class and is currently in the
+		// loadout selection screen as having reserved the right to spawn
+		// with this class.
+		if (!IsPlayerAlive(client) &&
+			g_e_PlayerState[client] != STATE_PICKINGLOADOUT)
 		{
 			continue;
 		}

@@ -71,7 +71,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.0.2",
+	version		= "1.0.3",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -121,6 +121,8 @@ public void OnPluginStart()
 		break;
 	}
 
+	Debug_ListPfns();
+
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
 }
@@ -147,6 +149,29 @@ Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 	int offset = g_i_PfnOffsets[pfn];
 	Address address = base + view_as<Address>(offset);
 	return view_as<Address>(LoadFromAddress(address, NumberType_Int32));
+}
+
+void Debug_ListPfns()
+{
+	for (PlayerStatePfn pfn = PFN_ENTER_STATE; pfn < PFN_ENUM_COUNT; ++pfn)
+	{
+		for (int client = 1; client <= MaxClients; ++client)
+		{
+			if (!IsClientInGame(client))
+			{
+				continue;
+			}
+			Address fn = GetPfn(client, STATE_PICKINGCLASS, pfn);
+			PrintToServer("Address for client %d pfn STATE_PICKINGCLASS %d: 0x%X",
+				client, pfn, fn);
+
+			fn = GetPfn(client, STATE_PICKINGLOADOUT, pfn);
+			PrintToServer("Address for client %d pfn STATE_PICKINGLOADOUT %d: 0x%X",
+				client, pfn, fn);
+
+			PrintToServer("--");
+		}
+	}
 }
 
 void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
@@ -228,6 +253,9 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 		{
 			continue;
 		}
+
+		g_e_PlayerState[client] = STATE_UNKNOWN;
+
 		// Force all players to go through the class selection each round
 		// regardless of their previous round class selection, to avoid anyone
 		// bypassing the spawn restrictions by defaulting to their previous
@@ -237,10 +265,23 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 			if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
 			{
 				SetPlayerClass(client, CLASS_NONE);
-				CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
+				CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
+					TIMER_FLAG_NO_MAPCHANGE);
 			}
 		}
 	}
+}
+
+public Action Timer_DeferStateReset(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (client == 0 || IsPlayerAlive(client) ||
+		GetClientTeam(client) <= TEAM_SPECTATOR)
+	{
+		return Plugin_Stop;
+	}
+	CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
+	return Plugin_Stop;
 }
 
 public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
@@ -251,55 +292,7 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 
 public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
 {
-	int client = hParams.Get(1);
-
-	// Bots *must* be allowed to spawn here to prevent a server crash
-	if (IsFakeClient(client))
-	{
-		return MRES_Ignored;
-	}
-
-	// Already spawned in the world
-	if (IsPlayerAlive(client))
-	{
-		return MRES_Ignored;
-	}
-
-	if (IsClassAllowed(client, GetPlayerClass(client)))
-	{
-		return MRES_Ignored;
-	}
-
-	// If this class was not allowed, see if there's any available class
-	int fallback_class = GetAllowedClass(client);
-
-	// If all the classes are full, just allow the player to spawn.
-	// This is necessary because otherwise
-	// this client would eventually spawn with no class, in a bugged state.
-	// Another alternative would be to forcibly yeet them to spectator,
-	// but this could be problematic in itself for competitive play due to
-	// possible ghosting.
-	// This can only happen if the sum of (sm_maxrecons + sm_maxassaults + sm_maxsupports)
-	// cvars is less than the number of players in a player team (Jin or NSF).
-	if (fallback_class == CLASS_NONE)
-	{
-		return MRES_Ignored;
-	}
-
-	if (g_e_PlayerState[client] != STATE_PICKINGLOADOUT)
-	{
-		return MRES_Ignored;
-	}
-
-	// If there was a class available, force it as the player's default class.
-	// This prevents a stubborn player from spawning with a forbidden class
-	// if they just opt to wait out the max. spawn selection time without
-	// choosing another class.
-	SetPlayerClass(client, fallback_class);
-
-
-	hReturn.Value = false;
-	return MRES_Supercede;
+	return MRES_Ignored;
 }
 
 // Retrieves the first allowed class for the given client based on class limits,

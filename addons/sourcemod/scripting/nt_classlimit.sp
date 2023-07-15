@@ -35,23 +35,43 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[PFN_ENUM_COUNT] = { 8, 24 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
 DynamicDetour g_dd_Pfn = null;
-DHookCallback g_PfnCbIds[PFN_ENUM_COUNT] = { INVALID_FUNCTION, ... };
+DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;
 
 PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_UNKNOWN, ... };
+
+void CNEOPlayer__State_Enter(int client, PlayerState state)
+{
+	static Handle call = INVALID_HANDLE;
+	if (call == INVALID_HANDLE)
+	{
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetSignature(SDKLibrary_Server,
+			"\x56\x8B\xF1\x8B\x86\x68\x0E\x00\x00", 9);
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		call = EndPrepSDKCall();
+		if (call == INVALID_HANDLE)
+		{
+			SetFailState("Failed to prepare SDK call");
+		}
+	}
+
+	SDKCall(call, client, state);
+	g_e_PlayerState[client] = state;
+}
 
 public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.0.1",
+	version		= "1.0.2",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -85,7 +105,8 @@ public void OnPluginStart()
 
 	AddCommandListener(Cmd_OnClass, "setclass");
 
-	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Pre))
+	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post) ||
+		!HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post))
 	{
 		SetFailState("Failed to hook event");
 	}
@@ -104,6 +125,7 @@ public void OnPluginStart()
 	AutoExecConfig();
 }
 
+// Hooks the player state change functions for the given client and state.
 void HookClassSelectionPfns(int client)
 {
 	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE,
@@ -114,24 +136,7 @@ void HookClassSelectionPfns(int client)
 		PfnHook_LeaveState_PickingLoadout);
 }
 
-void CallPlayerStatePfn(int client, PlayerState state, PlayerStatePfn pfn)
-{
-	Address fn = GetPfn(client, state, pfn);
-	if (fn == Address_Null)
-	{
-		return;
-	}
-	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetAddress(fn);
-	Handle call = EndPrepSDKCall();
-	if (call == INVALID_HANDLE)
-	{
-		ThrowError("Failed to prepare SDK call for (%d, %d)", state, pfn);
-	}
-	SDKCall(call, client);
-	CloseHandle(call);
-}
-
+// Retrieves the function pointer for the specified player state and ptr type
 Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 {
 	Address base = State_LookupInfo(client, state);
@@ -141,7 +146,7 @@ Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 	}
 	int offset = g_i_PfnOffsets[pfn];
 	Address address = base + view_as<Address>(offset);
-	return LoadFromAddress(address, NumberType_Int32);
+	return view_as<Address>(LoadFromAddress(address, NumberType_Int32));
 }
 
 void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
@@ -178,18 +183,21 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 	g_PfnCbIds[pfn] = cb;
 }
 
+// Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingClass(int client)
 {
 	g_e_PlayerState[client] = STATE_PICKINGCLASS;
 	return MRES_Ignored;
 }
 
+// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
 {
 	g_e_PlayerState[client] = STATE_PICKINGLOADOUT;
 	return MRES_Ignored;
 }
 
+// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
 public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
 {
 	// just labeling any other state as "unknown", since we're not interested
@@ -226,19 +234,19 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 		// round class selection.
 		if (GetClientTeam(client) > TEAM_SPECTATOR)
 		{
-			if (g_e_PlayerState[client] == STATE_PICKINGLOADOUT)
+			if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
 			{
-				int fallback_class = GetAllowedClass(client);
-				if (fallback_class != CLASS_NONE)
-				{
-					SetPlayerClass(client, fallback_class);
-					CallPlayerStatePfn(client, STATE_PICKINGCLASS,
-						PFN_ENTER_STATE);
-					ClientCommand(client, "playerstate_reverse");
-				}
+				SetPlayerClass(client, CLASS_NONE);
+				CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
 			}
 		}
 	}
+}
+
+public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	g_e_PlayerState[client] = STATE_UNKNOWN;
 }
 
 public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
@@ -289,13 +297,14 @@ public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
 	// choosing another class.
 	SetPlayerClass(client, fallback_class);
 
-	ClientCommand(client, "playerstate_reverse");
 
 	hReturn.Value = false;
 	return MRES_Supercede;
 }
 
-int GetAllowedClass(int client)
+// Retrieves the first allowed class for the given client based on class limits,
+// or CLASS_NONE if no such class exists.
+int GetAllowedClass(int client, bool warn_if_none=true)
 {
 	for (int class = CLASS_RECON; class <= CLASS_SUPPORT; ++class)
 	{
@@ -305,20 +314,29 @@ int GetAllowedClass(int client)
 		}
 	}
 
-	// This can happen if the sum of sm_maxrecons + sm_maxassaults + sm_maxsupports
-	// is less than the number of players in a team. For example, if only 5 players
-	// are allowed per class, but there's more than 3*5 players, the 16th player
-	// would have no valid class left. This is not a plugin bug per se, but rather
-	// a server misconfiguration regarding the abovementioned cvar limits.
+	// This can happen if the sum of sm_maxrecons + sm_maxassaults +
+	// sm_maxsupports is less than the number of players in a team.
+	// For example, if only 5 players are allowed per class, but there's more
+	// than 3*5 players, the 16th player would have no valid class left.
+	// This is not a plugin bug per se, but rather a server misconfiguration
+	// regarding the abovementioned cvar limits.
 	//
-	// TLDR: the sum of the 3 cvars should *always* be >= expected number of players
-	// in a playable team (Jinrai or NSF).
-	PrintToChatAll("%s WARNING: all class limits are exhausted!", g_s_PluginTag);
-	PrintToChatAll("This is a server config error. Allowing all classes to spawn.");
+	// TLDR: the sum of the 3 cvars should *always* be >= expected number of
+	// players in a playable team (Jinrai or NSF).
+	if (warn_if_none)
+	{
+		PrintToChatAll("%s WARNING: all class limits are exhausted!",
+			g_s_PluginTag);
+		PrintToChatAll("This is a server config error. Allowing all classes \
+to spawn.");
+	}
 
 	return CLASS_NONE;
 }
 
+// Returns the raw memory address of the player state info for the specified
+// client and state.
+// Can return 0 (nullptr) for ptrfunctions with no value set.
 Address State_LookupInfo(int client, PlayerState state)
 {
 	static Handle call = INVALID_HANDLE;
@@ -342,6 +360,7 @@ Address State_LookupInfo(int client, PlayerState state)
 	return SDKCall(call, client, view_as<int>(state));
 }
 
+// Command callback function for the "setclass" command.
 public Action Cmd_OnClass(int client, const char[] command, int argc)
 {
 	if (argc != 1)
@@ -360,15 +379,15 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	{
 		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
 		PrintCenterText(client, "- CLASS IS FULL -");
-
-		ClientCommand(client, "classmenu");
-
+		CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
 		return Plugin_Handled;
 	}
 
 	return Plugin_Continue;
 }
 
+// Returns whether the specified class is allowed for the given client based on
+// class limits.
 bool IsClassAllowed(int client, int class)
 {
 	int num_players_in_class = GetNumPlayersOfClassInTeam(
@@ -403,6 +422,7 @@ bool IsClassAllowed(int client, int class)
 	return num_players_in_class < cvar_limit.IntValue;
 }
 
+// Retrieves the number of players with the specified class in the given team.
 int GetNumPlayersOfClassInTeam(int class, int team)
 {
 	int number_of_players = 0;

@@ -70,7 +70,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.0.1",
+	version		= "1.0.2",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -104,7 +104,7 @@ public void OnPluginStart()
 
 	AddCommandListener(Cmd_OnClass, "setclass");
 
-	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Pre))
+	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post))
 	{
 		SetFailState("Failed to hook event");
 	}
@@ -140,26 +140,6 @@ void HookClassSelectionPfns(int client)
 		PfnHook_EnterState_PickingLoadout);
 	HookPlayerState(client, STATE_PICKINGLOADOUT, PFN_LEAVE_STATE,
 		PfnHook_LeaveState_PickingLoadout);
-}
-
-// Call the player's associated state function pointer manually.
-// Normally this happens automatically when changing state.
-void CallPlayerStatePfn(int client, PlayerState state, PlayerStatePfn pfn)
-{
-	Address fn = GetPfn(client, state, pfn);
-	if (fn == Address_Null)
-	{
-		return;
-	}
-	StartPrepSDKCall(SDKCall_Player);
-	PrepSDKCall_SetAddress(fn);
-	Handle call = EndPrepSDKCall();
-	if (call == INVALID_HANDLE)
-	{
-		ThrowError("Failed to prepare SDK call for (%d, %d)", state, pfn);
-	}
-	SDKCall(call, client);
-	CloseHandle(call);
 }
 
 // Retrieves the function pointer for the specified player state and ptr type
@@ -212,8 +192,6 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 // Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingClass(int client)
 {
-	PrintToChatAll("PfnHook_EnterState_PickingClass: %N", client);
-
 	g_e_PlayerState[client] = STATE_PICKINGCLASS;
 	return MRES_Ignored;
 }
@@ -228,8 +206,6 @@ public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
 // Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
 public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
 {
-	PrintToChatAll("PfnHook_LeaveState_PickingLoadout: %N", client);
-
 	// just labeling any other state as "unknown", since we're not interested
 	// in keeping track of it
 	g_e_PlayerState[client] = STATE_UNKNOWN;
@@ -403,9 +379,7 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	{
 		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
 		PrintCenterText(client, "- CLASS IS FULL -");
-
-		ClientCommand(client, "classmenu");
-
+		CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
 		return Plugin_Handled;
 	}
 

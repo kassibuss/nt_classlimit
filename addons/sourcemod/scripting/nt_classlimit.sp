@@ -104,6 +104,7 @@ public void OnPluginStart()
 	AutoExecConfig();
 }
 
+// Hooks the player state change functions for the given client and state.
 void HookClassSelectionPfns(int client)
 {
 	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE,
@@ -114,6 +115,8 @@ void HookClassSelectionPfns(int client)
 		PfnHook_LeaveState_PickingLoadout);
 }
 
+// Call the player's associated state function pointer manually.
+// Normally this happens automatically when changing state.
 void CallPlayerStatePfn(int client, PlayerState state, PlayerStatePfn pfn)
 {
 	Address fn = GetPfn(client, state, pfn);
@@ -132,6 +135,7 @@ void CallPlayerStatePfn(int client, PlayerState state, PlayerStatePfn pfn)
 	CloseHandle(call);
 }
 
+// Retrieves the function pointer for the specified player state and ptr type
 Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 {
 	Address base = State_LookupInfo(client, state);
@@ -178,18 +182,21 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 	g_PfnCbIds[pfn] = cb;
 }
 
+// Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingClass(int client)
 {
 	g_e_PlayerState[client] = STATE_PICKINGCLASS;
 	return MRES_Ignored;
 }
 
+// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
 {
 	g_e_PlayerState[client] = STATE_PICKINGLOADOUT;
 	return MRES_Ignored;
 }
 
+// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
 public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
 {
 	// just labeling any other state as "unknown", since we're not interested
@@ -295,7 +302,9 @@ public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
 	return MRES_Supercede;
 }
 
-int GetAllowedClass(int client)
+// Retrieves the first allowed class for the given client based on class limits,
+// or CLASS_NONE if no such class exists.
+int GetAllowedClass(int client, bool warn_if_none=true)
 {
 	for (int class = CLASS_RECON; class <= CLASS_SUPPORT; ++class)
 	{
@@ -305,20 +314,29 @@ int GetAllowedClass(int client)
 		}
 	}
 
-	// This can happen if the sum of sm_maxrecons + sm_maxassaults + sm_maxsupports
-	// is less than the number of players in a team. For example, if only 5 players
-	// are allowed per class, but there's more than 3*5 players, the 16th player
-	// would have no valid class left. This is not a plugin bug per se, but rather
-	// a server misconfiguration regarding the abovementioned cvar limits.
+	// This can happen if the sum of sm_maxrecons + sm_maxassaults +
+	// sm_maxsupports is less than the number of players in a team.
+	// For example, if only 5 players are allowed per class, but there's more
+	// than 3*5 players, the 16th player would have no valid class left.
+	// This is not a plugin bug per se, but rather a server misconfiguration
+	// regarding the abovementioned cvar limits.
 	//
-	// TLDR: the sum of the 3 cvars should *always* be >= expected number of players
-	// in a playable team (Jinrai or NSF).
-	PrintToChatAll("%s WARNING: all class limits are exhausted!", g_s_PluginTag);
-	PrintToChatAll("This is a server config error. Allowing all classes to spawn.");
+	// TLDR: the sum of the 3 cvars should *always* be >= expected number of
+	// players in a playable team (Jinrai or NSF).
+	if (warn_if_none)
+	{
+		PrintToChatAll("%s WARNING: all class limits are exhausted!",
+			g_s_PluginTag);
+		PrintToChatAll("This is a server config error. Allowing all classes \
+to spawn.");
+	}
 
 	return CLASS_NONE;
 }
 
+// Returns the raw memory address of the player state info for the specified
+// client and state.
+// Can return 0 (nullptr) for ptrfunctions with no value set.
 Address State_LookupInfo(int client, PlayerState state)
 {
 	static Handle call = INVALID_HANDLE;
@@ -342,6 +360,7 @@ Address State_LookupInfo(int client, PlayerState state)
 	return SDKCall(call, client, view_as<int>(state));
 }
 
+// Command callback function for the "setclass" command.
 public Action Cmd_OnClass(int client, const char[] command, int argc)
 {
 	if (argc != 1)
@@ -369,6 +388,8 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 	return Plugin_Continue;
 }
 
+// Returns whether the specified class is allowed for the given client based on
+// class limits.
 bool IsClassAllowed(int client, int class)
 {
 	int num_players_in_class = GetNumPlayersOfClassInTeam(
@@ -403,6 +424,7 @@ bool IsClassAllowed(int client, int class)
 	return num_players_in_class < cvar_limit.IntValue;
 }
 
+// Retrieves the number of players with the specified class in the given team.
 int GetNumPlayersOfClassInTeam(int class, int team)
 {
 	int number_of_players = 0;

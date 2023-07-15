@@ -35,14 +35,14 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[PFN_ENUM_COUNT] = { 8, 24 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
 DynamicDetour g_dd_Pfn = null;
-DHookCallback g_PfnCbIds[PFN_ENUM_COUNT] = { INVALID_FUNCTION, ... };
+DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;
 
 PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_UNKNOWN, ... };
@@ -141,7 +141,7 @@ Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 	}
 	int offset = g_i_PfnOffsets[pfn];
 	Address address = base + view_as<Address>(offset);
-	return LoadFromAddress(address, NumberType_Int32);
+	return view_as<Address>(LoadFromAddress(address, NumberType_Int32));
 }
 
 void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,

@@ -22,7 +22,6 @@ enum PlayerState {
 enum PlayerStatePfn {
 	PFN_ENTER_STATE = 0,
 	PFN_LEAVE_STATE,
-	PFN_PRETHINK,
 
 	PFN_ENUM_COUNT
 };
@@ -36,7 +35,7 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 

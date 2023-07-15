@@ -121,14 +121,6 @@ public void OnPluginStart()
 
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
-
-	RegAdminCmd("sm_r", Cmd_ReverseState, ADMFLAG_GENERIC);
-}
-
-public Action Cmd_ReverseState(int client, int argc)
-{
-	CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
-	return Plugin_Handled;
 }
 
 // Hooks the player state change functions for the given client and state.

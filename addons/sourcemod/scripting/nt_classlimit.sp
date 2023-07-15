@@ -63,7 +63,9 @@ void CNEOPlayer__State_Enter(int client, PlayerState state)
 			SetFailState("Failed to prepare SDK call");
 		}
 	}
+
 	SDKCall(call, client, state);
+	g_e_PlayerState[client] = state;
 }
 
 public Plugin myinfo = {
@@ -104,7 +106,8 @@ public void OnPluginStart()
 
 	AddCommandListener(Cmd_OnClass, "setclass");
 
-	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post))
+	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post) ||
+		!HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post))
 	{
 		SetFailState("Failed to hook event");
 	}
@@ -239,6 +242,12 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 			}
 		}
 	}
+}
+
+public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	g_e_PlayerState[client] = STATE_UNKNOWN;
 }
 
 public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)

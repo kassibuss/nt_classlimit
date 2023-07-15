@@ -22,6 +22,7 @@ enum PlayerState {
 enum PlayerStatePfn {
 	PFN_ENTER_STATE = 0,
 	PFN_LEAVE_STATE,
+	PFN_PRETHINK,
 
 	PFN_ENUM_COUNT
 };
@@ -35,7 +36,7 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 
@@ -46,6 +47,24 @@ DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ...
 HookMode g_pfnHookMode = Hook_Pre;
 
 PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_UNKNOWN, ... };
+
+void CNEOPlayer__State_Enter(int client, PlayerState state)
+{
+	static Handle call = INVALID_HANDLE;
+	if (call == INVALID_HANDLE)
+	{
+		StartPrepSDKCall(SDKCall_Player);
+		PrepSDKCall_SetSignature(SDKLibrary_Server,
+			"\x56\x8B\xF1\x8B\x86\x68\x0E\x00\x00", 9);
+		PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+		call = EndPrepSDKCall();
+		if (call == INVALID_HANDLE)
+		{
+			SetFailState("Failed to prepare SDK call");
+		}
+	}
+	SDKCall(call, client, state);
+}
 
 public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
@@ -102,6 +121,14 @@ public void OnPluginStart()
 
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
+
+	RegAdminCmd("sm_r", Cmd_ReverseState, ADMFLAG_GENERIC);
+}
+
+public Action Cmd_ReverseState(int client, int argc)
+{
+	CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
+	return Plugin_Handled;
 }
 
 // Hooks the player state change functions for the given client and state.
@@ -185,6 +212,8 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 // Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
 public MRESReturn PfnHook_EnterState_PickingClass(int client)
 {
+	PrintToChatAll("PfnHook_EnterState_PickingClass: %N", client);
+
 	g_e_PlayerState[client] = STATE_PICKINGCLASS;
 	return MRES_Ignored;
 }
@@ -199,6 +228,8 @@ public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
 // Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
 public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
 {
+	PrintToChatAll("PfnHook_LeaveState_PickingLoadout: %N", client);
+
 	// just labeling any other state as "unknown", since we're not interested
 	// in keeping track of it
 	g_e_PlayerState[client] = STATE_UNKNOWN;
@@ -233,16 +264,10 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 		// round class selection.
 		if (GetClientTeam(client) > TEAM_SPECTATOR)
 		{
-			if (g_e_PlayerState[client] == STATE_PICKINGLOADOUT)
+			if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
 			{
-				int fallback_class = GetAllowedClass(client);
-				if (fallback_class != CLASS_NONE)
-				{
-					SetPlayerClass(client, fallback_class);
-					CallPlayerStatePfn(client, STATE_PICKINGCLASS,
-						PFN_ENTER_STATE);
-					ClientCommand(client, "playerstate_reverse");
-				}
+				SetPlayerClass(client, CLASS_NONE);
+				CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
 			}
 		}
 	}
@@ -296,7 +321,6 @@ public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
 	// choosing another class.
 	SetPlayerClass(client, fallback_class);
 
-	ClientCommand(client, "playerstate_reverse");
 
 	hReturn.Value = false;
 	return MRES_Supercede;

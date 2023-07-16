@@ -7,7 +7,7 @@
 #pragma newdecls required
 
 enum PlayerState {
-	STATE_UNKNOWN = 0,
+	STATE_ALIVE = 0,
 	STATE_INTRO,
 	STATE_PICKINGTEAM,
 	STATE_PICKINGCLASS,
@@ -22,6 +22,7 @@ enum PlayerState {
 enum PlayerStatePfn {
 	PFN_ENTER_STATE = 0,
 	PFN_LEAVE_STATE,
+	PFN_PRETHINK,
 
 	PFN_ENUM_COUNT
 };
@@ -35,17 +36,16 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
-DynamicDetour g_dd_Pfn = null;
 DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;
 
-PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_UNKNOWN, ... };
+PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_OBSERVERMODE, ... };
 
 void CNEOPlayer__State_Enter(int client, PlayerState state)
 {
@@ -62,37 +62,19 @@ void CNEOPlayer__State_Enter(int client, PlayerState state)
 			SetFailState("Failed to prepare SDK call");
 		}
 	}
-
 	SDKCall(call, client, state);
-	g_e_PlayerState[client] = state;
 }
 
 public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.0.3",
+	version		= "1.1.0",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
 public void OnPluginStart()
 {
-	Handle gd = LoadGameConfigFile("neotokyo/block_spawn");
-	if (!gd)
-	{
-		SetFailState("Failed to load GameData");
-	}
-	DynamicDetour dd = DynamicDetour.FromConf(gd, "Fn_CNEOPlayer__PlayerReady");
-	if (!dd)
-	{
-		SetFailState("Failed to create dynamic detour");
-	}
-	if (!dd.Enable(Hook_Pre, Detour_PlayerReady))
-	{
-		SetFailState("Failed to detour");
-	}
-	CloseHandle(gd);
-
 	g_Cvar_MaxRecons = CreateConVar("sm_maxrecons", "32",
 		"Maximum amount of recons allowed per team",
 		_, true, 0.0, true, float(MaxClients));
@@ -103,13 +85,7 @@ public void OnPluginStart()
 		"Maximum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 
-	AddCommandListener(Cmd_OnClass, "setclass");
-
-	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post) ||
-		!HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post))
-	{
-		SetFailState("Failed to hook event");
-	}
+	AddCommandListener(Cmd_OnSetSkin, "SetVariant");
 
 	for (int client = 1; client <= MaxClients; ++client)
 	{
@@ -121,21 +97,300 @@ public void OnPluginStart()
 		break;
 	}
 
-	Debug_ListPfns();
-
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
 }
+
+public MRESReturn PfnHook_EnterState_PickingClass(int client)
+{
+	PrintToServer("PfnHook_EnterState_PickingClass: %N", client);
+	SetPlayerState(client, STATE_PICKINGCLASS);
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PickingClass(int client)
+{
+	if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
+	{
+		return MRES_Ignored;
+	}
+
+	//PrintToServer("Got here?");
+
+	int class = GetPlayerClass(client);
+	if (class == CLASS_NONE)
+	{
+		return MRES_Ignored;
+	}
+
+	if (!IsClassAllowed(client, class))
+	{
+		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
+		PrintCenterText(client, "- CLASS IS FULL -");
+
+		CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
+			TIMER_FLAG_NO_MAPCHANGE);
+		ClientCommand(client, "setclass 2");
+	}
+
+	return MRES_Ignored;
+}
+
+#if(0)
+public MRESReturn PfnHook_EnterState_Unknown(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_Unknown (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_Intro(int client)
+{
+	if (client == -1)
+	{
+		PrintToServer("PfnHook_EnterState_Intro: client was %d", client);
+		return MRES_Ignored;
+	}
+
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_Intro (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_PickingTeam(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_PickingTeam (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_PickingClass(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_PickingClass (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_PickingLoadout (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_PlayerDeath(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_PlayerDeath (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_Dead(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_Dead"); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_EnterState_ObserverMode(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_EnterState_ObserverMode (client %d)", client); }
+	return MRES_Ignored;
+}
+
+
+public MRESReturn PfnHook_LeaveState_Unknown(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_Unknown (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_Intro(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_Intro (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_PickingTeam(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_PickingTeam (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_PickingClass(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_PickingClass (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_PickingLoadout (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_PlayerDeath(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_PlayerDeath (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_Dead(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_Dead (client %d)", client); }
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_LeaveState_ObserverMode(int client)
+{
+	if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_LeaveState_ObserverMode (client %d)", client); }
+	return MRES_Ignored;
+}
+
+
+public MRESReturn PfnHook_PreThink_Unknown(int client)
+{
+	bool once_only = false;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_Unknown (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_Intro(int client)
+{
+	bool once_only = true;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_Intro (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PickingClass(int client)
+{
+	bool once_only = false;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_PickingClass (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PickingTeam(int client)
+{
+	bool once_only = false;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_PickingTeam (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PickingLoadout(int client)
+{
+	bool once_only = false;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_PickingLoadout (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PlayerDeath(int client)
+{
+	bool once_only = true;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_PlayerDeath (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_Dead(int client)
+{
+	bool once_only = true;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_Dead (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_ObserverMode(int client)
+{
+	bool once_only = true;
+	if (IsFakeClient(client)) { return MRES_Ignored; }
+	static bool triggered;
+	if (!once_only || !triggered)
+	{
+		if (!IsFakeClient(client)) { PrintToServer("Hello from PfnHook_PreThink_ObserverMode (client %d)", client); }
+		triggered = !triggered;
+	}
+
+	return MRES_Ignored;
+}
+#endif
 
 // Hooks the player state change functions for the given client and state.
 void HookClassSelectionPfns(int client)
 {
 	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE,
 		PfnHook_EnterState_PickingClass);
-	HookPlayerState(client, STATE_PICKINGLOADOUT, PFN_ENTER_STATE,
-		PfnHook_EnterState_PickingLoadout);
-	HookPlayerState(client, STATE_PICKINGLOADOUT, PFN_LEAVE_STATE,
-		PfnHook_LeaveState_PickingLoadout);
+	HookPlayerState(client, STATE_PICKINGCLASS, PFN_PRETHINK,
+		PfnHook_PreThink_PickingClass);
+
+#if(0)
+	HookPlayerState(client, STATE_UNKNOWN, PFN_ENTER_STATE, PfnHook_EnterState_Unknown);
+	HookPlayerState(client, STATE_UNKNOWN, PFN_LEAVE_STATE, PfnHook_LeaveState_Unknown);
+	HookPlayerState(client, STATE_UNKNOWN, PFN_PRETHINK, PfnHook_PreThink_Unknown);
+
+	HookPlayerState(client, STATE_INTRO, PFN_ENTER_STATE, PfnHook_EnterState_Intro);
+	HookPlayerState(client, STATE_INTRO, PFN_LEAVE_STATE, PfnHook_LeaveState_Intro);
+	HookPlayerState(client, STATE_INTRO, PFN_PRETHINK, PfnHook_PreThink_Intro);
+
+	HookPlayerState(client, STATE_PICKINGTEAM, PFN_ENTER_STATE, PfnHook_EnterState_PickingTeam);
+	HookPlayerState(client, STATE_PICKINGTEAM, PFN_LEAVE_STATE, PfnHook_LeaveState_PickingTeam);
+	HookPlayerState(client, STATE_PICKINGTEAM, PFN_PRETHINK, PfnHook_PreThink_PickingTeam);
+
+	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE, PfnHook_EnterState_PickingClass);
+	HookPlayerState(client, STATE_PICKINGCLASS, PFN_LEAVE_STATE, PfnHook_LeaveState_PickingClass);
+	HookPlayerState(client, STATE_PICKINGCLASS, PFN_PRETHINK, PfnHook_PreThink_PickingClass);
+
+	HookPlayerState(client, STATE_PLAYERDEATH, PFN_ENTER_STATE, PfnHook_EnterState_PlayerDeath);
+	HookPlayerState(client, STATE_PLAYERDEATH, PFN_LEAVE_STATE, PfnHook_LeaveState_PlayerDeath);
+	HookPlayerState(client, STATE_PLAYERDEATH, PFN_PRETHINK, PfnHook_PreThink_PlayerDeath);
+
+	HookPlayerState(client, STATE_DEAD, PFN_ENTER_STATE, PfnHook_EnterState_Dead);
+	HookPlayerState(client, STATE_DEAD, PFN_LEAVE_STATE, PfnHook_LeaveState_Dead);
+	HookPlayerState(client, STATE_DEAD, PFN_PRETHINK, PfnHook_PreThink_Dead);
+
+	HookPlayerState(client, STATE_OBSERVERMODE, PFN_ENTER_STATE, PfnHook_EnterState_ObserverMode);
+	HookPlayerState(client, STATE_OBSERVERMODE, PFN_LEAVE_STATE, PfnHook_LeaveState_ObserverMode);
+	HookPlayerState(client, STATE_OBSERVERMODE, PFN_PRETHINK, PfnHook_PreThink_ObserverMode);
+#endif
 }
 
 // Retrieves the function pointer for the specified player state and ptr type
@@ -149,29 +404,6 @@ Address GetPfn(int client, PlayerState state, PlayerStatePfn pfn)
 	int offset = g_i_PfnOffsets[pfn];
 	Address address = base + view_as<Address>(offset);
 	return view_as<Address>(LoadFromAddress(address, NumberType_Int32));
-}
-
-void Debug_ListPfns()
-{
-	for (PlayerStatePfn pfn = PFN_ENTER_STATE; pfn < PFN_ENUM_COUNT; ++pfn)
-	{
-		for (int client = 1; client <= MaxClients; ++client)
-		{
-			if (!IsClientInGame(client))
-			{
-				continue;
-			}
-			Address fn = GetPfn(client, STATE_PICKINGCLASS, pfn);
-			PrintToServer("Address for client %d pfn STATE_PICKINGCLASS %d: 0x%X",
-				client, pfn, fn);
-
-			fn = GetPfn(client, STATE_PICKINGLOADOUT, pfn);
-			PrintToServer("Address for client %d pfn STATE_PICKINGLOADOUT %d: 0x%X",
-				client, pfn, fn);
-
-			PrintToServer("--");
-		}
-	}
 }
 
 void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
@@ -190,45 +422,14 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 		return;
 	}
 
-	if (!g_dd_Pfn)
-	{
-		g_dd_Pfn = DHookCreateDetour(fn, CallConv_THISCALL, ReturnType_Void,
-			ThisPointer_CBaseEntity);
-		if (!g_dd_Pfn)
-		{
-			ThrowError("Failed to create detour for pfn %d", pfn);
-		}
-	}
-
-	if (!g_dd_Pfn.Enable(g_pfnHookMode, cb))
+	DynamicDetour dd = DHookCreateDetour(fn, CallConv_THISCALL, ReturnType_Void,
+		ThisPointer_CBaseEntity);
+	if (!dd.Enable(g_pfnHookMode, cb))
 	{
 		ThrowError("Failed to detour pfn %d", pfn);
 	}
-
 	g_PfnCbIds[pfn] = cb;
-}
-
-// Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
-public MRESReturn PfnHook_EnterState_PickingClass(int client)
-{
-	g_e_PlayerState[client] = STATE_PICKINGCLASS;
-	return MRES_Ignored;
-}
-
-// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_ENTER_STATE
-public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
-{
-	g_e_PlayerState[client] = STATE_PICKINGLOADOUT;
-	return MRES_Ignored;
-}
-
-// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
-public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
-{
-	// just labeling any other state as "unknown", since we're not interested
-	// in keeping track of it
-	g_e_PlayerState[client] = STATE_UNKNOWN;
-	return MRES_Ignored;
+	delete dd;
 }
 
 public void OnClientPutInServer(int client)
@@ -239,37 +440,8 @@ public void OnClientPutInServer(int client)
 		return;
 	}
 
-	if (!g_dd_Pfn)
-	{
-		HookClassSelectionPfns(client);
-	}
-}
-
-public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
-{
-	for (int client = 1; client <= MaxClients; ++client)
-	{
-		if (!IsClientInGame(client) || IsFakeClient(client))
-		{
-			continue;
-		}
-
-		g_e_PlayerState[client] = STATE_UNKNOWN;
-
-		// Force all players to go through the class selection each round
-		// regardless of their previous round class selection, to avoid anyone
-		// bypassing the spawn restrictions by defaulting to their previous
-		// round class selection.
-		if (GetClientTeam(client) > TEAM_SPECTATOR)
-		{
-			if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
-			{
-				SetPlayerClass(client, CLASS_NONE);
-				CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
-					TIMER_FLAG_NO_MAPCHANGE);
-			}
-		}
-	}
+	SetPlayerState(client, STATE_OBSERVERMODE);
+	HookClassSelectionPfns(client);
 }
 
 public Action Timer_DeferStateReset(Handle timer, int userid)
@@ -280,19 +452,16 @@ public Action Timer_DeferStateReset(Handle timer, int userid)
 	{
 		return Plugin_Stop;
 	}
+
+	//CallPlayerStatePfn(client, STATE_PICKINGLOADOUT, PFN_LEAVE_STATE);
+	//CallPlayerStatePfn(client, STATE_PLAYERDEATH, PFN_ENTER_STATE);
+	//CallPlayerStatePfn(client, STATE_PLAYERDEATH, PFN_LEAVE_STATE);
+	//CallPlayerStatePfn(client, STATE_OBSERVERMODE, PFN_ENTER_STATE);
+	//CallPlayerStatePfn(client, STATE_OBSERVERMODE, PFN_LEAVE_STATE);
+
 	CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
+
 	return Plugin_Stop;
-}
-
-public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	g_e_PlayerState[client] = STATE_UNKNOWN;
-}
-
-public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
-{
-	return MRES_Ignored;
 }
 
 // Retrieves the first allowed class for the given client based on class limits,
@@ -354,29 +523,26 @@ Address State_LookupInfo(int client, PlayerState state)
 }
 
 // Command callback function for the "setclass" command.
-public Action Cmd_OnClass(int client, const char[] command, int argc)
+public Action Cmd_OnSetSkin(int client, const char[] command, int argc)
 {
-	if (argc != 1)
+	if (argc != 1 || IsPlayerAlive(client))
 	{
 		return Plugin_Continue;
 	}
 
-	if (IsPlayerAlive(client))
+	if (GetClientTeam(client) <= TEAM_SPECTATOR)
 	{
-		return Plugin_Handled;
+		return Plugin_Continue;
 	}
 
-	int desired_class = GetCmdArgInt(1);
-
-	if (!IsClassAllowed(client, desired_class))
-	{
-		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
-		PrintCenterText(client, "- CLASS IS FULL -");
-		CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
-		return Plugin_Handled;
-	}
-
+	SetPlayerState(client, STATE_PICKINGLOADOUT);
 	return Plugin_Continue;
+}
+
+void SetPlayerState(int client, PlayerState state)
+{
+	PrintToServer("SetPlayerState (%d): %d", client, state);
+	g_e_PlayerState[client] = state;
 }
 
 // Returns whether the specified class is allowed for the given client based on
@@ -413,6 +579,25 @@ bool IsClassAllowed(int client, int class)
 	}
 
 	return num_players_in_class < cvar_limit.IntValue;
+}
+
+// TODO: needed?
+stock void CallPlayerStatePfn(int client, PlayerState state, PlayerStatePfn pfn)
+{
+	Address fn = GetPfn(client, state, pfn);
+	if (fn == Address_Null)
+	{
+		return;
+	}
+	StartPrepSDKCall(SDKCall_Player);
+	PrepSDKCall_SetAddress(fn);
+	Handle call = EndPrepSDKCall();
+	if (call == INVALID_HANDLE)
+	{
+		ThrowError("Failed to prepare SDK call for (%d, %d)", state, pfn);
+	}
+	SDKCall(call, client);
+	CloseHandle(call);
 }
 
 // Retrieves the number of players with the specified class in the given team.

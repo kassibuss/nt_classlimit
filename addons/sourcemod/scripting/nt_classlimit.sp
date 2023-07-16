@@ -7,7 +7,7 @@
 #pragma newdecls required
 
 enum PlayerState {
-	STATE_UNKNOWN = 0,
+	STATE_ALIVE = 0,
 	STATE_INTRO,
 	STATE_PICKINGTEAM,
 	STATE_PICKINGCLASS,
@@ -22,6 +22,7 @@ enum PlayerState {
 enum PlayerStatePfn {
 	PFN_ENTER_STATE = 0,
 	PFN_LEAVE_STATE,
+	PFN_PRETHINK,
 
 	PFN_ENUM_COUNT
 };
@@ -35,17 +36,17 @@ enum PlayerStatePfn {
 	40	void (CPlayer::*pfnPreThink)();
 	56
 */
-int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24 };
+int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
+char g_s_classnames[][] = { "None", "Recon", "Assault", "Support" };
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
-DynamicDetour g_dd_Pfn = null;
 DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;
 
-PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_UNKNOWN, ... };
+PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_OBSERVERMODE, ... };
 
 void CNEOPlayer__State_Enter(int client, PlayerState state)
 {
@@ -62,37 +63,19 @@ void CNEOPlayer__State_Enter(int client, PlayerState state)
 			SetFailState("Failed to prepare SDK call");
 		}
 	}
-
 	SDKCall(call, client, state);
-	g_e_PlayerState[client] = state;
 }
 
 public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.0.2",
+	version		= "1.1.0",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
 public void OnPluginStart()
 {
-	Handle gd = LoadGameConfigFile("neotokyo/block_spawn");
-	if (!gd)
-	{
-		SetFailState("Failed to load GameData");
-	}
-	DynamicDetour dd = DynamicDetour.FromConf(gd, "Fn_CNEOPlayer__PlayerReady");
-	if (!dd)
-	{
-		SetFailState("Failed to create dynamic detour");
-	}
-	if (!dd.Enable(Hook_Pre, Detour_PlayerReady))
-	{
-		SetFailState("Failed to detour");
-	}
-	CloseHandle(gd);
-
 	g_Cvar_MaxRecons = CreateConVar("sm_maxrecons", "32",
 		"Maximum amount of recons allowed per team",
 		_, true, 0.0, true, float(MaxClients));
@@ -103,13 +86,7 @@ public void OnPluginStart()
 		"Maximum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 
-	AddCommandListener(Cmd_OnClass, "setclass");
-
-	if (!HookEventEx("game_round_start", OnRoundStart, EventHookMode_Post) ||
-		!HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post))
-	{
-		SetFailState("Failed to hook event");
-	}
+	AddCommandListener(Cmd_OnSetSkin, "SetVariant");
 
 	for (int client = 1; client <= MaxClients; ++client)
 	{
@@ -125,15 +102,47 @@ public void OnPluginStart()
 	AutoExecConfig();
 }
 
+public MRESReturn PfnHook_EnterState_PickingClass(int client)
+{
+	SetPlayerState(client, STATE_PICKINGCLASS);
+	return MRES_Ignored;
+}
+
+public MRESReturn PfnHook_PreThink_PickingClass(int client)
+{
+	if (g_e_PlayerState[client] != STATE_PICKINGCLASS &&
+		g_e_PlayerState[client] != STATE_PICKINGLOADOUT)
+	{
+		return MRES_Ignored;
+	}
+
+	int class = GetPlayerClass(client);
+	if (class < CLASS_RECON || class > CLASS_SUPPORT)
+	{
+		return MRES_Ignored;
+	}
+
+	if (!IsClassAllowed(client, class))
+	{
+		PrintToChat(client, "%s %s class is full! Please select another class",
+			g_s_PluginTag, g_s_classnames[class]);
+		PrintCenterText(client, "- CLASS %s IS FULL -", g_s_classnames[class]);
+
+		CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
+			TIMER_FLAG_NO_MAPCHANGE);
+		ClientCommand(client, "setclass %d", GetAllowedClass(client));
+	}
+
+	return MRES_Ignored;
+}
+
 // Hooks the player state change functions for the given client and state.
 void HookClassSelectionPfns(int client)
 {
 	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE,
 		PfnHook_EnterState_PickingClass);
-	HookPlayerState(client, STATE_PICKINGLOADOUT, PFN_ENTER_STATE,
-		PfnHook_EnterState_PickingLoadout);
-	HookPlayerState(client, STATE_PICKINGLOADOUT, PFN_LEAVE_STATE,
-		PfnHook_LeaveState_PickingLoadout);
+	HookPlayerState(client, STATE_PICKINGCLASS, PFN_PRETHINK,
+		PfnHook_PreThink_PickingClass);
 }
 
 // Retrieves the function pointer for the specified player state and ptr type
@@ -165,45 +174,14 @@ void HookPlayerState(int client, PlayerState state, PlayerStatePfn pfn,
 		return;
 	}
 
-	if (!g_dd_Pfn)
-	{
-		g_dd_Pfn = DHookCreateDetour(fn, CallConv_THISCALL, ReturnType_Void,
-			ThisPointer_CBaseEntity);
-		if (!g_dd_Pfn)
-		{
-			ThrowError("Failed to create detour for pfn %d", pfn);
-		}
-	}
-
-	if (!g_dd_Pfn.Enable(g_pfnHookMode, cb))
+	DynamicDetour dd = DHookCreateDetour(fn, CallConv_THISCALL, ReturnType_Void,
+		ThisPointer_CBaseEntity);
+	if (!dd.Enable(g_pfnHookMode, cb))
 	{
 		ThrowError("Failed to detour pfn %d", pfn);
 	}
-
 	g_PfnCbIds[pfn] = cb;
-}
-
-// Detour for the player state ptr STATE_PICKINGCLASS -> PFN_ENTER_STATE
-public MRESReturn PfnHook_EnterState_PickingClass(int client)
-{
-	g_e_PlayerState[client] = STATE_PICKINGCLASS;
-	return MRES_Ignored;
-}
-
-// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_ENTER_STATE
-public MRESReturn PfnHook_EnterState_PickingLoadout(int client)
-{
-	g_e_PlayerState[client] = STATE_PICKINGLOADOUT;
-	return MRES_Ignored;
-}
-
-// Detour for the player state ptr STATE_PICKINGLOADOUT -> PFN_LEAVE_STATE
-public MRESReturn PfnHook_LeaveState_PickingLoadout(int client)
-{
-	// just labeling any other state as "unknown", since we're not interested
-	// in keeping track of it
-	g_e_PlayerState[client] = STATE_UNKNOWN;
-	return MRES_Ignored;
+	delete dd;
 }
 
 public void OnClientPutInServer(int client)
@@ -214,92 +192,22 @@ public void OnClientPutInServer(int client)
 		return;
 	}
 
-	if (!g_dd_Pfn)
-	{
-		HookClassSelectionPfns(client);
-	}
+	SetPlayerState(client, STATE_OBSERVERMODE);
+	HookClassSelectionPfns(client);
 }
 
-public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
+public Action Timer_DeferStateReset(Handle timer, int userid)
 {
-	for (int client = 1; client <= MaxClients; ++client)
+	int client = GetClientOfUserId(userid);
+	if (client == 0 || IsPlayerAlive(client) ||
+		GetClientTeam(client) <= TEAM_SPECTATOR)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client))
-		{
-			continue;
-		}
-		// Force all players to go through the class selection each round
-		// regardless of their previous round class selection, to avoid anyone
-		// bypassing the spawn restrictions by defaulting to their previous
-		// round class selection.
-		if (GetClientTeam(client) > TEAM_SPECTATOR)
-		{
-			if (g_e_PlayerState[client] != STATE_PICKINGCLASS)
-			{
-				SetPlayerClass(client, CLASS_NONE);
-				CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
-			}
-		}
-	}
-}
-
-public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	g_e_PlayerState[client] = STATE_UNKNOWN;
-}
-
-public MRESReturn Detour_PlayerReady(DHookReturn hReturn, DHookParam hParams)
-{
-	int client = hParams.Get(1);
-
-	// Bots *must* be allowed to spawn here to prevent a server crash
-	if (IsFakeClient(client))
-	{
-		return MRES_Ignored;
+		return Plugin_Stop;
 	}
 
-	// Already spawned in the world
-	if (IsPlayerAlive(client))
-	{
-		return MRES_Ignored;
-	}
+	CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
 
-	if (IsClassAllowed(client, GetPlayerClass(client)))
-	{
-		return MRES_Ignored;
-	}
-
-	// If this class was not allowed, see if there's any available class
-	int fallback_class = GetAllowedClass(client);
-
-	// If all the classes are full, just allow the player to spawn.
-	// This is necessary because otherwise
-	// this client would eventually spawn with no class, in a bugged state.
-	// Another alternative would be to forcibly yeet them to spectator,
-	// but this could be problematic in itself for competitive play due to
-	// possible ghosting.
-	// This can only happen if the sum of (sm_maxrecons + sm_maxassaults + sm_maxsupports)
-	// cvars is less than the number of players in a player team (Jin or NSF).
-	if (fallback_class == CLASS_NONE)
-	{
-		return MRES_Ignored;
-	}
-
-	if (g_e_PlayerState[client] != STATE_PICKINGLOADOUT)
-	{
-		return MRES_Ignored;
-	}
-
-	// If there was a class available, force it as the player's default class.
-	// This prevents a stubborn player from spawning with a forbidden class
-	// if they just opt to wait out the max. spawn selection time without
-	// choosing another class.
-	SetPlayerClass(client, fallback_class);
-
-
-	hReturn.Value = false;
-	return MRES_Supercede;
+	return Plugin_Stop;
 }
 
 // Retrieves the first allowed class for the given client based on class limits,
@@ -361,29 +269,25 @@ Address State_LookupInfo(int client, PlayerState state)
 }
 
 // Command callback function for the "setclass" command.
-public Action Cmd_OnClass(int client, const char[] command, int argc)
+public Action Cmd_OnSetSkin(int client, const char[] command, int argc)
 {
-	if (argc != 1)
+	if (argc != 1 || IsPlayerAlive(client))
 	{
 		return Plugin_Continue;
 	}
 
-	if (IsPlayerAlive(client))
+	if (GetClientTeam(client) <= TEAM_SPECTATOR)
 	{
-		return Plugin_Handled;
+		return Plugin_Continue;
 	}
 
-	int desired_class = GetCmdArgInt(1);
-
-	if (!IsClassAllowed(client, desired_class))
-	{
-		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
-		PrintCenterText(client, "- CLASS IS FULL -");
-		CNEOPlayer__State_Enter(client, STATE_PICKINGCLASS);
-		return Plugin_Handled;
-	}
-
+	SetPlayerState(client, STATE_PICKINGLOADOUT);
 	return Plugin_Continue;
+}
+
+void SetPlayerState(int client, PlayerState state)
+{
+	g_e_PlayerState[client] = state;
 }
 
 // Returns whether the specified class is allowed for the given client based on
@@ -391,7 +295,7 @@ public Action Cmd_OnClass(int client, const char[] command, int argc)
 bool IsClassAllowed(int client, int class)
 {
 	int num_players_in_class = GetNumPlayersOfClassInTeam(
-		class, GetClientTeam(client)
+		class, GetClientTeam(client), client
 	);
 
 	ConVar cvar_limit;
@@ -423,11 +327,15 @@ bool IsClassAllowed(int client, int class)
 }
 
 // Retrieves the number of players with the specified class in the given team.
-int GetNumPlayersOfClassInTeam(int class, int team)
+int GetNumPlayersOfClassInTeam(int class, int team, int ignore_client=-1)
 {
 	int number_of_players = 0;
 	for (int client = 1; client <= MaxClients; client++)
 	{
+		if (client == ignore_client)
+		{
+			continue;
+		}
 		if (!IsClientInGame(client))
 		{
 			continue;

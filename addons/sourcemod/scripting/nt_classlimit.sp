@@ -39,6 +39,7 @@ enum PlayerStatePfn {
 int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
+char g_s_classnames[][] = { "None", "Recon", "Assault", "Support" };
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
 
@@ -116,15 +117,16 @@ public MRESReturn PfnHook_PreThink_PickingClass(int client)
 	}
 
 	int class = GetPlayerClass(client);
-	if (class == CLASS_NONE)
+	if (class < CLASS_RECON || class > CLASS_SUPPORT)
 	{
 		return MRES_Ignored;
 	}
 
 	if (!IsClassAllowed(client, class))
 	{
-		PrintToChat(client, "%s Please select another class", g_s_PluginTag);
-		PrintCenterText(client, "- CLASS IS FULL -");
+		PrintToChat(client, "%s %s class is full! Please select another class",
+			g_s_PluginTag, g_s_classnames[class]);
+		PrintCenterText(client, "- CLASS %s IS FULL -", g_s_classnames[class]);
 
 		CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
 			TIMER_FLAG_NO_MAPCHANGE);

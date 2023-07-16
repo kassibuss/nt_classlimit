@@ -2,7 +2,7 @@
 Class limit plugin for competitive Neotokyo play
 
 ## Build requirements
-* SourceMod 1.7 or newer
+* SourceMod 1.8 or newer
 * [Neotokyo include](https://github.com/softashell/sourcemod-nt-include), version 1.0 or newer
 
 ## Installation

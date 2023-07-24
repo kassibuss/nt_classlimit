@@ -1,4 +1,5 @@
 #include <sourcemod>
+#include <sdktools>
 #include <dhooks>
 
 #include <neotokyo>
@@ -70,7 +71,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.1.0",
+	version		= "1.1.1",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -124,9 +125,26 @@ public MRESReturn PfnHook_PreThink_PickingClass(int client)
 
 	if (!IsClassAllowed(client, class))
 	{
-		PrintToChat(client, "%s %s class is full! Please select another class",
-			g_s_PluginTag, g_s_classnames[class]);
-		PrintCenterText(client, "- CLASS %s IS FULL -", g_s_classnames[class]);
+		// Need to check because otherwise we'll endlessly attempt to revert
+		// the class selection, eventually overflowing the client's memory.
+		if (GetAllowedClass(client) == CLASS_NONE)
+		{
+			return MRES_Ignored;
+		}
+
+		if (CanPrintFor(client))
+		{
+			PrintToChat(
+				client,
+				"%s %s class is full! Please select another class",
+				g_s_PluginTag, g_s_classnames[class]
+			);
+			PrintCenterText(
+				client,
+				"- CLASS %s IS FULL -",
+				g_s_classnames[class]
+			);
+		}
 
 		CreateTimer(0.1, Timer_DeferStateReset, GetClientUserId(client),
 			TIMER_FLAG_NO_MAPCHANGE);
@@ -134,6 +152,19 @@ public MRESReturn PfnHook_PreThink_PickingClass(int client)
 	}
 
 	return MRES_Ignored;
+}
+
+bool CanPrintFor(int client=0, float limit=1.0)
+{
+	static float last_print_time[NEO_MAXPLAYERS + 1];
+	float time_now = GetTickedTime();
+	float delta_time = time_now - last_print_time[client];
+	bool res = delta_time >= limit;
+	if (res)
+	{
+		last_print_time[client] = time_now;
+	}
+	return res;
 }
 
 // Hooks the player state change functions for the given client and state.
@@ -222,10 +253,10 @@ int GetAllowedClass(int client, bool warn_if_none=true)
 		}
 	}
 
-	// This can happen if the sum of sm_maxrecons + sm_maxassaults +
-	// sm_maxsupports is less than the number of players in a team.
+	// This can happen if the sum of (sm_maxrecons + sm_maxassaults +
+	// sm_maxsupports) is less than the number of players in a team.
 	// For example, if only 5 players are allowed per class, but there's more
-	// than 3*5 players, the 16th player would have no valid class left.
+	// than 3 * 5 players, the 16th player would have no valid class left.
 	// This is not a plugin bug per se, but rather a server misconfiguration
 	// regarding the abovementioned cvar limits.
 	//
@@ -233,10 +264,20 @@ int GetAllowedClass(int client, bool warn_if_none=true)
 	// players in a playable team (Jinrai or NSF).
 	if (warn_if_none)
 	{
-		PrintToChatAll("%s WARNING: all class limits are exhausted!",
-			g_s_PluginTag);
-		PrintToChatAll("This is a server config error. Allowing all classes \
-to spawn.");
+		if (CanPrintFor(0, 15.0))
+		{
+			PrintToChatAll(
+				"%s WARNING: all class limits are exhausted!",
+				g_s_PluginTag
+			);
+			static bool has_logged_error = false;
+			if (!has_logged_error)
+			{
+				LogError("All class limits are exhausted! \
+This is a config error, please see the plugin docs for details.");
+				has_logged_error = true;
+			}
+		}
 	}
 
 	return CLASS_NONE;

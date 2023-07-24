@@ -42,12 +42,21 @@ int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 char g_s_classnames[][] = { "None", "Recon", "Assault", "Support" };
 
-ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports;
+ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports,
+	g_Cvar_InfractionMode;
 
 DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;
 
 PlayerState g_e_PlayerState[NEO_MAXPLAYERS + 1] = { STATE_OBSERVERMODE, ... };
+
+// Infraction modes. These should not be reordered for config compatibility.
+enum {
+	IM_IGNORE = 0,
+	IM_SLAY,
+
+	IM_ENUM_COUNT
+}
 
 void CNEOPlayer__State_Enter(int client, PlayerState state)
 {
@@ -71,7 +80,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.1.1",
+	version		= "1.2.0",
 	url			= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -86,8 +95,13 @@ public void OnPluginStart()
 	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32",
 		"Maximum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
+	g_Cvar_InfractionMode = CreateConVar("sm_classlimit_infraction_mode", "1",
+		"How should nt_classlimit react to class selection infractions. \
+0: do nothing, 1: slay the player",
+		_, true, 0.0, true, float(IM_ENUM_COUNT - 1));
 
 	AddCommandListener(Cmd_OnSetSkin, "SetVariant");
+	HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Pre);
 
 	for (int client = 1; client <= MaxClients; ++client)
 	{
@@ -101,6 +115,42 @@ public void OnPluginStart()
 
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
+}
+
+public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+	if (g_Cvar_InfractionMode.IntValue == IM_IGNORE)
+	{
+		return;
+	}
+
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (client == 0 || GetClientTeam(client) <= TEAM_SPECTATOR)
+	{
+		return;
+	}
+
+	if (!IsClassAllowed(client, GetPlayerClass(client)))
+	{
+		CreateTimer(0.1, Timer_DeferSlay, GetClientUserId(client));
+	}
+}
+
+public Action Timer_DeferSlay(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (client == 0 || !IsPlayerAlive(client) ||
+		GetClientTeam(client) <= TEAM_SPECTATOR)
+	{
+		return Plugin_Stop;
+	}
+
+	FakeClientCommand(client, "kill");
+	SetPlayerXP(client, GetPlayerXP(client) + 1); // undo XP loss
+	PrintToChatAll("%s Slayed player \"%N\" for class infraction",
+		g_s_PluginTag, client);
+
+	return Plugin_Stop;
 }
 
 public MRESReturn PfnHook_EnterState_PickingClass(int client)

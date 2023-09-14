@@ -95,6 +95,15 @@ public void OnPluginStart()
 	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32",
 		"Maximum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
+	g_Cvar_MinRecons = CreateConVar("sm_maxrecons", "32",
+		"Minimum amount of recons allowed per team",
+		_, true, 0.0, true, float(MaxClients));
+	g_Cvar_MinAssaults = CreateConVar("sm_maxassaults", "32",
+		"Minimum amount of assaults allowed per team",
+		_, true, 0.0, true, float(MaxClients));
+	g_Cvar_MinSupports = CreateConVar("sm_maxsupports", "32",
+		"Minimum amount of supports allowed per team",
+		_, true, 0.0, true, float(MaxClients));
 	g_Cvar_InfractionMode = CreateConVar("sm_classlimit_infraction_mode", "1",
 		"How should nt_classlimit react to class selection infractions. \
 0: do nothing, 1: slay the player",

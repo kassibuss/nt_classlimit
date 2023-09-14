@@ -42,8 +42,8 @@ int g_i_PfnOffsets[view_as<int>(PFN_ENUM_COUNT)] = { 8, 24, 40 };
 char g_s_PluginTag[] = "[CLASS-LIMITS]";
 char g_s_classnames[][] = { "None", "Recon", "Assault", "Support" };
 
-ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports,
-	g_Cvar_InfractionMode;
+ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports, g_Cvar_MinRecons, g_Cvar_MinAssaults, g_Cvar_MinSupports
+	g_Cvar_InfractionMode; 
 
 DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
 HookMode g_pfnHookMode = Hook_Pre;

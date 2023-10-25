@@ -82,7 +82,7 @@ public Plugin myinfo = {
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
 	version		= "1.3.0",
-	url			= "https://github.com/kassibuss/nt_classlimit"
+	url		= "https://github.com/kassibuss/nt_classlimit"
 };
 
 public void OnPluginStart()

@@ -226,7 +226,7 @@ bool CanPrintFor(int client=0, float limit=1.0)
 	return res;
 }
 
-// Hooks the player state change functions for the given client and state.
+// Hooks the class selection relevant state change functions for the given client
 void HookClassSelectionPfns(int client)
 {
 	HookPlayerState(client, STATE_PICKINGCLASS, PFN_ENTER_STATE,

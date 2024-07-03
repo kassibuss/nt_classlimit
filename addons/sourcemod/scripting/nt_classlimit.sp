@@ -133,7 +133,7 @@ public Action Command_Limit(int client, int args)
 {
 	if (args == 0)
 	{
-		ReplyToCommand(client, "Usage !limit x where x sets the limit for all classes");
+		ReplyToCommand(client, "Usage !classlimit x where x sets the limit for all classes");
 		return Plugin_Handled;
 	}
 	

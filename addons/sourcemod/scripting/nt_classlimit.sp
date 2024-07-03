@@ -137,7 +137,7 @@ public Action Command_Limit(int client, int args)
 		return Plugin_Handled;
 	}
 	
-	char limitArg[2 + 1];
+	char limitArg[3 + 1];
 	GetCmdArg(1, limitArg, sizeof(limitArg));
 	int limit = StringToInt(limitArg);
 

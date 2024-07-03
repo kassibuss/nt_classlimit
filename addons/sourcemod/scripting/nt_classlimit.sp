@@ -81,7 +81,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.3.1",
+	version		= "1.4.0",
 	url		= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -131,9 +131,9 @@ public void OnPluginStart()
 
 public Action Command_Limit(int client, int args)
 {
-	if (args == 0)
+	if (args != 1)
 	{
-		ReplyToCommand(client, "Usage !classlimit x where x sets the limit for all classes");
+		ReplyToCommand(client, "Usage \"!classlimit x\" where x sets the limit for all classes");
 		return Plugin_Handled;
 	}
 	
@@ -141,10 +141,10 @@ public Action Command_Limit(int client, int args)
 	GetCmdArg(1, limitArg, sizeof(limitArg));
 	int limit = StringToInt(limitArg);
 
-	if(limit == 0)
+	if(limit <= 0)
 	{
-		limit = 16;
-		ReplyToCommand(client, "Setting limit failed, setting limits to 16 each");
+		ReplyToCommand(client, "Invalid limit, limits have not been changed");
+		return Plugin_Handled;
 	}
 
 	g_Cvar_MaxRecons.SetInt(limit);

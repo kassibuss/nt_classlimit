@@ -141,7 +141,7 @@ public Action Command_Limit(int client, int args)
 	GetCmdArg(1, limitArg, sizeof(limitArg));
 	int limit = StringToInt(limitArg);
 
-	if(limit <= 0 || limit > MaxClients)
+	if(limit < 1 || limit > MaxClients)
 	{
 		ReplyToCommand(client, "Invalid limit, limits have not been changed");
 		return Plugin_Handled;

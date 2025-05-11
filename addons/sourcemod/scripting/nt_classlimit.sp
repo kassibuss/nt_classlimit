@@ -81,7 +81,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.4.0",
+	version		= "1.4.1",
 	url		= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -124,6 +124,7 @@ public void OnPluginStart()
 	}
 	
 	RegAdminCmd("sm_classlimit", Command_Limit, ADMFLAG_GENERIC);
+	RegAdminCmd("sm_classlimits", Command_Limit, ADMFLAG_GENERIC);
 	
 	// Create the default config file, if it doesn't exist yet
 	AutoExecConfig();
@@ -133,7 +134,7 @@ public Action Command_Limit(int client, int args)
 {
 	if (args != 1)
 	{
-		ReplyToCommand(client, "Usage \"!classlimit x\" where x sets the limit for all classes");
+		ReplyToCommand(client, "%s Usage \"!classlimit(s) x\" where x sets the limit for all classes", g_s_PluginTag);
 		return Plugin_Handled;
 	}
 	
@@ -143,7 +144,7 @@ public Action Command_Limit(int client, int args)
 
 	if(limit < 1 || limit > MaxClients)
 	{
-		ReplyToCommand(client, "Invalid limit, limits have not been changed");
+		ReplyToCommand(client, "%s Invalid limit, limits have not been changed", g_s_PluginTag);
 		return Plugin_Handled;
 	}
 
@@ -151,7 +152,7 @@ public Action Command_Limit(int client, int args)
 	g_Cvar_MaxAssaults.SetInt(limit);
 	g_Cvar_MaxSupports.SetInt(limit);
 	
-	PrintToChatAll("Class limit set to %d each", limit);
+	PrintToChatAll("%s Class limit set to %d each", g_s_PluginTag, limit);
 	
 	return Plugin_Handled;
 }

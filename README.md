@@ -14,7 +14,7 @@ Class limit plugin for competitive Neotokyo play
 * `sm_maxrecons` (min 0, max 32, default 32) – Maximum amount of recons allowed per team
 * `sm_maxassaults` (min 0, max 32, default 32) – Maximum amount of assaults allowed per team
 * `sm_maxsupports` (min 0, max 32, default 32) – Maximum amount of supports allowed per team
-* `sm_classlimit_infraction_mode` (min 0, max 1, default 1) – How should nt_classlimit react to class selection infractions\*. 0: do nothing, 1: slay the player
+* `sm_classlimit_infraction_mode` (min 0, max 2, default 2) – How should nt_classlimit react to class selection infractions\*. 0: do nothing, 1: slay the player, 2: warn everyone
 
 You can change these defaults at `cfg/sourcemod/plugin.nt_classlimit.cfg`; the config file will be automatically created using the default values if it doesn't exist already.
 

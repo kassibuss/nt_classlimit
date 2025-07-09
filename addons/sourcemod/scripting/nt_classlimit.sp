@@ -81,7 +81,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.5.0",
+	version		= "1.5.1",
 	url		= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -174,18 +174,31 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	{
 		CreateTimer(0.1, Timer_DeferSlay, GetClientUserId(client));
 	}
-	
-	char msg[128];
-	
-	if (g_Cvar_InfractionMode.IntValue == IM_WARN && !IsClassAllowed(client, GetPlayerClass(client)))
+	else if (g_Cvar_InfractionMode.IntValue == IM_WARN && !IsClassAllowed(client, GetPlayerClass(client)))
 	{
-		Format(msg, sizeof(msg), "%s %N spawned with disallowed class!", g_s_PluginTag, client);
-		PrintToChatAll(msg);
-		PrintToConsoleAll(msg);
-		LogToGame(msg);
+		CreateTimer(0.1, Timer_DeferWarn, GetClientUserId(client));
 	}
 }
 
+public Action Timer_DeferWarn(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (client == 0 || !IsPlayerAlive(client) ||
+		GetClientTeam(client) <= TEAM_SPECTATOR)
+	{
+		return Plugin_Stop;
+	}
+	
+	char msg[128];
+	
+	Format(msg, sizeof(msg), "%s \"%N\" spawned with disallowed class!", g_s_PluginTag, client);
+	PrintToChatAll(msg);
+	PrintToConsoleAll(msg);
+	LogToGame(msg);
+	
+	return Plugin_Stop;
+}
+	
 public Action Timer_DeferSlay(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);

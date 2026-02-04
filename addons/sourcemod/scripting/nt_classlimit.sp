@@ -43,7 +43,6 @@ char g_s_PluginTag[] = "[CLASS-LIMITS]";
 char g_s_classnames[][] = { "None", "Recon", "Assault", "Support" };
 
 ConVar g_Cvar_MaxRecons, g_Cvar_MaxAssaults, g_Cvar_MaxSupports,
-	g_Cvar_MinRecons, g_Cvar_MinAssaults, g_Cvar_MinSupports,
 	g_Cvar_InfractionMode;
 
 DHookCallback g_PfnCbIds[view_as<int>(PFN_ENUM_COUNT)] = { INVALID_FUNCTION, ... };
@@ -81,7 +80,7 @@ public Plugin myinfo = {
 	name		= "Neotokyo Class Limits",
 	author		= "kinoko, rain",
 	description	= "Enables allowing class limits for competitive play without the need for manual tracking",
-	version		= "1.5.0",
+	version		= "1.5.1",
 	url		= "https://github.com/kassibuss/nt_classlimit"
 };
 
@@ -95,15 +94,6 @@ public void OnPluginStart()
 		_, true, 0.0, true, float(MaxClients));
 	g_Cvar_MaxSupports = CreateConVar("sm_maxsupports", "32",
 		"Maximum amount of supports allowed per team",
-		_, true, 0.0, true, float(MaxClients));
-	g_Cvar_MinRecons = CreateConVar("sm_minrecons", "32",
-		"Minimum amount of recons allowed per team",
-		_, true, 0.0, true, float(MaxClients));
-	g_Cvar_MinAssaults = CreateConVar("sm_minassaults", "32",
-		"Minimum amount of assaults allowed per team",
-		_, true, 0.0, true, float(MaxClients));
-	g_Cvar_MinSupports = CreateConVar("sm_minsupports", "32",
-		"Minimum amount of supports allowed per team",
 		_, true, 0.0, true, float(MaxClients));
 	g_Cvar_InfractionMode = CreateConVar("sm_classlimit_infraction_mode", "2",
 		"How should nt_classlimit react to class selection infractions. \
@@ -134,13 +124,26 @@ public Action Command_Limit(int client, int args)
 {
 	if (args != 1)
 	{
-		ReplyToCommand(client, "%s Usage \"!classlimit(s) x\" where x sets the limit for all classes", g_s_PluginTag);
+		char argName[32];
+		if (!GetCmdArg(0, argName, sizeof(argName)))
+		{
+			ThrowError("Failed to get command name");
+		}
+		char triggers[1+1];
+#if SOURCEMOD_V_MAJOR < 1 || (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR <= 11)
+		triggers[0] = '!';
+#else
+		if (!GetPublicChatTriggers(triggers, sizeof(triggers)))
+		{
+			ThrowError("Failed to get public chat triggers");
+		}
+#endif
+		ReplyToCommand(client, "%s Usage \"%c%s x\" where x sets the limit for all classes",
+			g_s_PluginTag, triggers[0], argName);
 		return Plugin_Handled;
 	}
-	
-	char limitArg[3 + 1];
-	GetCmdArg(1, limitArg, sizeof(limitArg));
-	int limit = StringToInt(limitArg);
+
+	int limit = GetCmdArgInt(1);
 
 	if(limit < 1 || limit > MaxClients)
 	{
@@ -502,10 +505,10 @@ int GetNumPlayersOfClassInTeam(int class, int team, int ignore_client=-1)
 	return number_of_players;
 }
 
-// Backported from SourceMod/SourcePawn SDK for SM < 1.11 compatibility.
+// Functions backported from SourceMod/SourcePawn SDK for older SM compatibility.
 // Used here under GPLv3 license: https://www.sourcemod.net/license.php
 // SourceMod (C) AlliedModders LLC.  All rights reserved.
-#if SOURCEMOD_V_MAJOR <= 1 && SOURCEMOD_V_MINOR < 11
+#if SOURCEMOD_V_MAJOR < 1 || (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR <= 10)
 /**
  * Retrieves a numeric command argument given its index, from the current
  * console or server command. Will return 0 if the argument can not be
@@ -520,5 +523,28 @@ stock int GetCmdArgInt(int argnum)
 	GetCmdArg(argnum, str, sizeof(str));
 
 	return StringToInt(str);
+}
+#endif
+
+#if SOURCEMOD_V_MAJOR < 1 || (SOURCEMOD_V_MAJOR == 1 && SOURCEMOD_V_MINOR <= 8)
+/**
+ * Sends a message to every client's console.
+ *
+ * @param format		Formatting rules.
+ * @param ...		   Variable number of format parameters.
+ */
+stock void PrintToConsoleAll(const char[] format, any ...)
+{
+	char buffer[254];
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i))
+		{
+			SetGlobalTransTarget(i);
+			VFormat(buffer, sizeof(buffer), format, 2);
+			PrintToConsole(i, "%s", buffer);
+		}
+	}
 }
 #endif
